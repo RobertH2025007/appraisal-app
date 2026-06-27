@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/Users/rhowl/appraisal-app/**)",
+      "Bash(supabase db *)",
+      "Bash(npx tsc *)",
+      "Bash(vercel --prod)"
+    ]
+  }
+}
