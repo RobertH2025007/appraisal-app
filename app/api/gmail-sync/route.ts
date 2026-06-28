@@ -8,10 +8,8 @@ function field(plaintext: string, name: string): string {
 
 function splitAddress(full: string): { address: string; city: string } {
   if (!full.trim()) return { address: "", city: "" };
-  // "123 Main St, Los Angeles, CA" or "123 Main St, Los Angeles CA"
   const m = full.match(/^(.+?),\s*([^,]+?),?\s*CA\b/i);
   if (m) return { address: m[1].trim(), city: `${m[2].trim()}, CA` };
-  // "123 Main St Los Angeles CA" (space-separated)
   const m2 = full.match(/^(.+?)\s+([A-Z][a-z]+(?: [A-Z][a-z]+)*),?\s*CA\b/);
   if (m2) return { address: m2[1].trim(), city: `${m2[2].trim()}, CA` };
   return { address: full, city: "" };
@@ -65,6 +63,7 @@ export async function GET() {
   const clientId = process.env.GOOGLE_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
   const refreshToken = process.env.GOOGLE_REFRESH_TOKEN;
+  const spreadsheetId = process.env.GOOGLE_SPREADSHEET_ID;
 
   if (!clientId || !clientSecret || !refreshToken) {
     return Response.json(
@@ -118,7 +117,56 @@ export async function GET() {
       quotes.push(parseEmail(plaintext, date, t.id));
     }
 
-    return Response.json({ quotes, count: quotes.length });
+    // Write new submissions to Google Sheet
+    let sheetsAdded = 0;
+    if (spreadsheetId && quotes.length > 0) {
+      try {
+        const sheets = google.sheets({ version: "v4", auth });
+
+        // Read existing thread IDs from column O (used for dedup)
+        const existingRes = await sheets.spreadsheets.values.get({
+          spreadsheetId,
+          range: "Phone Tracking!O:O",
+        });
+        const existingThreadIds = new Set(
+          (existingRes.data.values ?? []).flat().filter(Boolean)
+        );
+
+        const newRows = quotes
+          .filter((q) => !existingThreadIds.has(q.threadId))
+          .map((q) => [
+            q.created,
+            q.orderedBy,
+            [q.address, q.city].filter(Boolean).join(", "),
+            q.detail.contactPhone,
+            q.detail.contactEmail,
+            "",
+            "Form Completion",
+            q.detail.reportType || "",
+            "",
+            "",
+            "No Response",
+            "$0.00",
+            "",
+            "",
+            q.threadId,
+          ]);
+
+        if (newRows.length > 0) {
+          await sheets.spreadsheets.values.append({
+            spreadsheetId,
+            range: "Phone Tracking!A:O",
+            valueInputOption: "USER_ENTERED",
+            requestBody: { values: newRows },
+          });
+          sheetsAdded = newRows.length;
+        }
+      } catch (sheetErr) {
+        console.error("Sheets write error:", sheetErr);
+      }
+    }
+
+    return Response.json({ quotes, count: quotes.length, sheetsAdded });
   } catch (err) {
     const message = err instanceof Error ? err.message : "Unknown error";
     return Response.json({ error: message }, { status: 500 });
