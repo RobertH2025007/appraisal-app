@@ -4,7 +4,9 @@
       "Read(//c/Users/rhowl/appraisal-app/**)",
       "Bash(supabase db *)",
       "Bash(npx tsc *)",
-      "Bash(vercel --prod)"
+      "Bash(vercel --prod)",
+      "Bash(npm install *)",
+      "PowerShell(head *)"
     ]
   }
 }
