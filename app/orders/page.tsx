@@ -4,7 +4,7 @@ import React from "react";
 import PageHeader from "@/components/PageHeader";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Filter, Table2, Map, LayoutGrid, Clock, Trash2, ChevronRight, ChevronDown, RefreshCw } from "lucide-react";
+import { Plus, Filter, Table2, Map, LayoutGrid, Clock, Trash2, ChevronRight, ChevronDown, RefreshCw, Pencil } from "lucide-react";
 import Link from "next/link";
 import { loadOrders, loadOrderDetail, saveOrderDetail, deleteOrder, updateOrderStatus, type StoredOrder, type OrderDetailState } from "@/lib/orders-store";
 import { loadGmailQuotes, saveGmailQuotes, type GmailQuoteEntry } from "@/lib/gmail-quotes-store";
@@ -768,6 +768,13 @@ export default function OrdersPage() {
                         </div>
                       ) : (
                         <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={e => { e.stopPropagation(); router.push(`/orders/${order.id}`); }}
+                            className="p-1 hover:bg-blue-50 rounded text-gray-400 hover:text-blue-600 transition-colors"
+                            title="Edit order"
+                          >
+                            <Pencil size={13} />
+                          </button>
                           <button
                             onClick={e => { e.stopPropagation(); handleHideOrder(order.id); }}
                             className="p-1 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors"

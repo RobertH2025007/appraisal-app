@@ -135,31 +135,68 @@ export async function GET() {
         const newRows = quotes
           .filter((q) => !existingThreadIds.has(q.threadId))
           .map((q) => [
-            q.created,
-            q.orderedBy,
-            [q.address, q.city].filter(Boolean).join(", "),
-            q.detail.contactPhone,
-            q.detail.contactEmail,
-            "",
-            "Form Completion",
-            q.detail.reportType || "",
-            "",
-            "",
-            "No Response",
-            "$0.00",
-            "",
-            "",
-            q.threadId,
+            q.created,          // A: Date
+            q.orderedBy,        // B: Client Name
+            [q.address, q.city].filter(Boolean).join(", "), // C: Address
+            q.detail.contactPhone, // D: Phone
+            q.detail.contactEmail, // E: Email
+            "Form Completion",  // F: Lead Source
+            q.detail.reportType || "", // G: Appraisal Type
+            "",                 // H: Contacted
+            "No Response",      // I: Status
+            "$0.00",            // J: Quote
+            "",                 // K: Revenue
+            "",                 // L: Intent
+            "",                 // M: Comments
+            "",                 // N: SEO
+            q.threadId,         // O: Thread ID (dedup)
           ]);
 
         if (newRows.length > 0) {
-          await sheets.spreadsheets.values.append({
+          // Read columns B–E (name, address, phone, email) for position detection and dedup.
+          const colBERes = await sheets.spreadsheets.values.get({
             spreadsheetId,
-            range: "Phone Tracking!A:O",
-            valueInputOption: "USER_ENTERED",
-            requestBody: { values: newRows },
+            range: "Phone Tracking!B:E",
           });
-          sheetsAdded = newRows.length;
+          const beVals = colBERes.data.values ?? [];
+
+          // Dedup by email (column E, index 3) — exact format, no normalization ambiguity.
+          // Skip the check when email is empty so blank-email rows aren't falsely deduped.
+          const existingEmails = new Set(
+            beVals.map((row) => (row[3] ?? "").trim().toLowerCase()).filter(Boolean)
+          );
+
+          // Scan column B for insert position, stopping at the first gap of 2+ empty rows.
+          // This prevents the scan from wandering into the law-firm/analytics sections below.
+          let lastLeadRow = 1;
+          let emptyRun = 0;
+          for (let i = 0; i < beVals.length; i++) {
+            const name = (beVals[i]?.[0] ?? "").trim();
+            if (name) {
+              lastLeadRow = i + 1; // 1-indexed
+              emptyRun = 0;
+            } else {
+              emptyRun++;
+              if (emptyRun >= 2) break;
+            }
+          }
+          const insertRow = lastLeadRow + 1;
+
+          // Filter by email dedup (row[4] = column E in the 15-value row array)
+          const dedupedRows = newRows.filter((row) => {
+            const email = (row[4] as string ?? "").trim().toLowerCase();
+            return !email || !existingEmails.has(email);
+          });
+
+          if (dedupedRows.length > 0) {
+            await sheets.spreadsheets.values.update({
+              spreadsheetId,
+              range: `Phone Tracking!A${insertRow}`,
+              valueInputOption: "USER_ENTERED",
+              requestBody: { values: dedupedRows },
+            });
+            sheetsAdded = dedupedRows.length;
+          }
         }
       } catch (sheetErr) {
         console.error("Sheets write error:", sheetErr);
