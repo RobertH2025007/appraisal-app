@@ -501,6 +501,13 @@ function normalizeDateField(value: string): string {
   return formatDate(date, hasTime ? "MMM d, yyyy h:mm a" : "MMM d, yyyy");
 }
 
+// Fee/total columns often export as currency-formatted text ("$1,200.00").
+// Strip the formatting so it lands in the fee input as a plain number.
+function normalizeFeeField(value: string): string {
+  const cleaned = value.trim().replace(/[$,]/g, "");
+  return /^\d+(\.\d+)?$/.test(cleaned) ? cleaned : value;
+}
+
 function csvRowToOrder(row: Record<string, string>): Omit<StoredOrder, "id" | "created"> {
   const get = (...keys: string[]) =>
     keys.map(k => row[k] ?? row[k.replace(/_/g, " ")] ?? "").find(v => v) ?? "";
@@ -516,7 +523,7 @@ function csvRowToOrder(row: Record<string, string>): Omit<StoredOrder, "id" | "c
     contactPhone:  get("phone", "contact_phone", "phone_number"),
     orderType:     get("order_type", "order_source") || "Lender",
     reportType:    get("report_type", "type", "form"),
-    fee:           get("fee", "amount", "appraisal_fee"),
+    fee:           normalizeFeeField(get("fee", "amount", "appraisal_fee", "fee_total", "total_fee", "total", "flat_fee", "quoted_fee")),
     dueDate:       normalizeDateField(get("due_date", "due", "deadline", "delivery_date")),
     inspectionDate:normalizeDateField(get("inspection_date", "inspection", "inspection_datetime")),
     purpose:       get("purpose", "appraisal_purpose"),
