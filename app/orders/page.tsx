@@ -186,6 +186,21 @@ export default function OrdersPage() {
     return dir === "asc" ? at - bt : bt - at;
   };
 
+  const getFeeTotal = (id: string, baseFee: string): number => {
+    const d = mockDetails[id] ?? {};
+    if (d.lineItems?.length) {
+      return d.lineItems.reduce((sum, li) => sum + (parseFloat(li.amount) || 0), 0);
+    }
+    if (d.quoteFee) return parseFloat(d.quoteFee) || 0;
+    return parseFloat(baseFee) || 0;
+  };
+
+  const getPaymentTotal = (id: string, feeTotal: number): number => {
+    const d = mockDetails[id] ?? {};
+    if (!d.isPaid) return 0;
+    return parseFloat(d.paymentRecord?.amount || "") || feeTotal;
+  };
+
   const handleDeleteQuote = (id: string) => {
     if (id.startsWith("gmail-")) {
       const updated = gmailQuotes.filter(q => q.id !== id);
@@ -293,6 +308,7 @@ export default function OrdersPage() {
         isQuote: false,
         email: d.orderEmail ?? o.contactEmail ?? "",
         phone: d.orderPhone ?? o.contactPhone ?? "",
+        fee: o.fee ?? "",
         detail: { contactEmail: o.contactEmail, contactPhone: o.contactPhone },
       };
     }),
@@ -311,6 +327,7 @@ export default function OrdersPage() {
           isQuote,
           email: d.orderEmail ?? o.detail?.contactEmail ?? "",
           phone: d.orderPhone ?? o.detail?.contactPhone ?? "",
+          fee: o.detail?.fee ?? "",
         };
       }),
     ...gmailQuotes,
@@ -610,8 +627,8 @@ export default function OrdersPage() {
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
                   {isQuotesTab ? "PROSPECT" : "ORDERED BY"}
                 </th>
-                {!isQuotesTab && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">EMAIL</th>}
-                {!isQuotesTab && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">PHONE</th>}
+                {!isQuotesTab && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">FEE TOTAL</th>}
+                {!isQuotesTab && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">PAYMENT TOTAL</th>}
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
                   <button
                     onClick={toggleDateSort}
@@ -729,26 +746,22 @@ export default function OrdersPage() {
                         <p className="text-xs text-gray-700">{order.orderedBy}</p>
                       )}
                     </td>
-                    {!isQuotesTab && (
-                      <td className="px-4 py-3 min-w-[160px]" onClick={e => e.stopPropagation()}>
-                        <EditableCell
-                          value={(order as { email?: string }).email ?? ""}
-                          placeholder="No email"
-                          textClass="text-xs text-gray-600"
-                          onSave={v => handleDetailField(order.id, "orderEmail", v)}
-                        />
-                      </td>
-                    )}
-                    {!isQuotesTab && (
-                      <td className="px-4 py-3 min-w-[120px]" onClick={e => e.stopPropagation()}>
-                        <EditableCell
-                          value={(order as { phone?: string }).phone ?? ""}
-                          placeholder="No phone"
-                          textClass="text-xs text-gray-600"
-                          onSave={v => handleDetailField(order.id, "orderPhone", v)}
-                        />
-                      </td>
-                    )}
+                    {!isQuotesTab && (() => {
+                      const feeTotal = getFeeTotal(order.id, (order as { fee?: string }).fee ?? "");
+                      const paymentTotal = getPaymentTotal(order.id, feeTotal);
+                      return (
+                        <>
+                          <td className="px-4 py-3 min-w-[100px]">
+                            <p className="text-xs font-medium text-gray-800">${feeTotal.toFixed(0)}</p>
+                          </td>
+                          <td className="px-4 py-3 min-w-[100px]">
+                            <p className={`text-xs font-medium ${paymentTotal > 0 ? "text-green-600" : "text-gray-400"}`}>
+                              ${paymentTotal.toFixed(0)}
+                            </p>
+                          </td>
+                        </>
+                      );
+                    })()}
                     <td className="px-4 py-3">
                       {isQuotesTab ? (
                         <p className="text-xs text-gray-600">{order.created}</p>
