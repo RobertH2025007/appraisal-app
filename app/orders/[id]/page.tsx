@@ -3,6 +3,7 @@
 import { useParams, useRouter } from "next/navigation";
 import { loadOrders, updateOrderStatus, loadOrderDetail, saveOrderDetail } from "@/lib/orders-store";
 import { mockOrders } from "@/lib/mock-orders";
+import { loadGmailQuotes } from "@/lib/gmail-quotes-store";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -201,7 +202,12 @@ export default function OrderDetailPage() {
       applyOrder(found);
     } else {
       const mock = mockOrders.find(m => m.id === id);
-      if (mock) applyOrder(toOrderData(mock));
+      if (mock) {
+        applyOrder(toOrderData(mock));
+      } else {
+        const gmailQuote = loadGmailQuotes().find(q => q.id === id);
+        if (gmailQuote) applyOrder(toOrderData(gmailQuote));
+      }
     }
 
     setLoading(false);
