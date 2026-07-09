@@ -2,6 +2,7 @@
 
 import { useParams, useRouter } from "next/navigation";
 import { loadOrders, updateOrderStatus, loadOrderDetail, saveOrderDetail } from "@/lib/orders-store";
+import { mockOrders } from "@/lib/mock-orders";
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import {
@@ -11,58 +12,24 @@ import {
   Copy, Printer, Link2, X, CheckCheck, Paperclip, Pencil,
 } from "lucide-react";
 
-const MOCK_ORDERS = [
-  {
-    id: "268426-HQ58", address: "6746 Corie Ln", city: "West Hills", state: "CA",
-    property: "Single-Family", type: "GPAR", orderedBy: "Kevin Reed",
-    due: "May 4, 2026", created: "Apr 26, 2026", status: "In Progress",
-    contactEmail: "kevin.reed@lender.com", contactPhone: "(818) 555-0101",
-    orderType: "Lender", reportType: "GPAR - 1004 (Single Family)", fee: "500",
-    dueDate: "May 4, 2026", inspectionDate: "Apr 28, 2026 9:00 AM",
-    purpose: "Current Market Evaluation", loanNumber: "LN-8842210",
-    zip: "91307", notes: "Access via lockbox. Code: 4421. Call borrower 30 min before.",
-  },
-  {
-    id: "268426-HDCT", address: "29867 Sea Breeze Way", city: "Menifee", state: "CA",
-    property: "Single-Family", type: "GPAR", orderedBy: "Hernan Ortiz",
-    due: "May 3, 2026", created: "Apr 26, 2026", status: "In Progress",
-    contactEmail: "h.ortiz@firstcal.com", contactPhone: "(951) 555-0188",
-    orderType: "Lender", reportType: "GPAR - 1004 (Single Family)", fee: "475",
-    dueDate: "May 3, 2026", inspectionDate: "Apr 27, 2026 11:00 AM",
-    purpose: "Current Market Evaluation", loanNumber: "LN-7731045",
-    zip: "92584", notes: "",
-  },
-  {
-    id: "268426-ABCD", address: "1234 Sunset Blvd", city: "Los Angeles", state: "CA",
-    property: "Single-Family", type: "GPAR", orderedBy: "Jane Smith",
-    due: "Apr 28, 2026", created: "Apr 10, 2026", status: "In Progress",
-    contactEmail: "jane.smith@privatemail.com", contactPhone: "(323) 555-0244",
-    orderType: "Private Work", reportType: "GPAR - 1004 (Single Family)", fee: "550",
-    dueDate: "Apr 28, 2026", inspectionDate: "Apr 14, 2026 10:00 AM",
-    purpose: "Estate/Trust/Probate", loanNumber: "",
-    zip: "90026", notes: "Estate sale. Contact attorney Jane Smith for access.",
-  },
-  {
-    id: "268426-EFGH", address: "5678 Oak Ave", city: "Pasadena", state: "CA",
-    property: "Single-Family", type: "GPAR", orderedBy: "Mike Johnson",
-    due: "Jun 10, 2026", created: "May 15, 2026", status: "At Risk",
-    contactEmail: "mjohnson@westernbank.com", contactPhone: "(626) 555-0377",
-    orderType: "Lender", reportType: "GPAR - 1004 (Single Family)", fee: "500",
-    dueDate: "Jun 10, 2026", inspectionDate: "Jun 2, 2026 2:00 PM",
-    purpose: "Current Market Evaluation", loanNumber: "LN-9954321",
-    zip: "91101", notes: "",
-  },
-  {
-    id: "268426-IJKL", address: "910 Pine St", city: "Glendale", state: "CA",
-    property: "Condo", type: "GPAR", orderedBy: "Sara Lee",
-    due: "Jun 30, 2026", created: "Jun 1, 2026", status: "In Progress",
-    contactEmail: "sara.lee@gmail.com", contactPhone: "(818) 555-0512",
-    orderType: "Private Work", reportType: "1073 - Condominium", fee: "450",
-    dueDate: "Jun 30, 2026", inspectionDate: "Jun 20, 2026 1:00 PM",
-    purpose: "Pre-Listing / Pre-Purchase", loanNumber: "",
-    zip: "91205", notes: "Unit 4B. Ring intercom.",
-  },
-];
+function splitCityState(cityState: string): { city: string; state: string } {
+  const parts = cityState.split(",").map(s => s.trim()).filter(Boolean);
+  if (parts.length >= 2) return { city: parts.slice(0, -1).join(", "), state: parts[parts.length - 1] };
+  return { city: cityState, state: "" };
+}
+
+function toOrderData(o: (typeof mockOrders)[number]): OrderData {
+  const { city, state } = splitCityState(o.city);
+  return {
+    id: o.id, address: o.address, city, state, zip: o.detail.zip,
+    property: o.property, type: o.type, orderedBy: o.orderedBy,
+    contactEmail: o.detail.contactEmail, contactPhone: o.detail.contactPhone,
+    orderType: o.detail.orderType, reportType: o.detail.reportType, fee: o.detail.fee,
+    dueDate: o.detail.dueDate || o.due, inspectionDate: o.detail.inspectionDate,
+    purpose: o.detail.purpose, loanNumber: o.detail.loanNumber, notes: o.detail.notes,
+    status: o.status, created: o.created,
+  };
+}
 
 const WORKFLOW_STEPS = [
   { label: "Accept Order", desc: "Confirm and accept the appraisal order" },
@@ -233,8 +200,8 @@ export default function OrderDetailPage() {
     if (found) {
       applyOrder(found);
     } else {
-      const mock = MOCK_ORDERS.find(m => m.id === id);
-      if (mock) applyOrder(mock);
+      const mock = mockOrders.find(m => m.id === id);
+      if (mock) applyOrder(toOrderData(mock));
     }
 
     setLoading(false);
