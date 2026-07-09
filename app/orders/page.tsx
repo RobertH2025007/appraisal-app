@@ -4,7 +4,7 @@ import React from "react";
 import PageHeader from "@/components/PageHeader";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import { Plus, Filter, Table2, Map, LayoutGrid, Clock, Trash2, ChevronRight, ChevronDown, RefreshCw, Pencil } from "lucide-react";
+import { Plus, Filter, Table2, Map, LayoutGrid, Clock, Trash2, ChevronRight, ChevronDown, RefreshCw, Pencil, ArrowUp, ArrowDown, ArrowUpDown } from "lucide-react";
 import Link from "next/link";
 import { loadOrders, loadOrderDetail, saveOrderDetail, deleteOrder, updateOrderStatus, type StoredOrder, type OrderDetailState } from "@/lib/orders-store";
 import { loadGmailQuotes, saveGmailQuotes, type GmailQuoteEntry } from "@/lib/gmail-quotes-store";
@@ -116,6 +116,7 @@ export default function OrdersPage() {
   const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [deletedQuoteIds, setDeletedQuoteIds] = useState<Set<string>>(new Set());
   const [hiddenOrderIds, setHiddenOrderIds] = useState<Set<string>>(new Set());
+  const [dateSortDir, setDateSortDir] = useState<"asc" | "desc" | null>(null);
 
   useEffect(() => {
     const loadData = () => {
@@ -163,6 +164,26 @@ export default function OrdersPage() {
   const handleTabChange = (t: string) => {
     setTab(t);
     setStatusFilter(null);
+    setDateSortDir(null);
+  };
+
+  const toggleDateSort = () => {
+    setDateSortDir(prev => prev === null ? "asc" : prev === "asc" ? "desc" : null);
+  };
+
+  const parseDateSafe = (value: string): number | null => {
+    if (!value || value === "—") return null;
+    const t = new Date(value).getTime();
+    return Number.isNaN(t) ? null : t;
+  };
+
+  const compareByDate = (aVal: string, bVal: string, dir: "asc" | "desc"): number => {
+    const at = parseDateSafe(aVal);
+    const bt = parseDateSafe(bVal);
+    if (at === null && bt === null) return 0;
+    if (at === null) return 1;
+    if (bt === null) return -1;
+    return dir === "asc" ? at - bt : bt - at;
   };
 
   const handleDeleteQuote = (id: string) => {
@@ -301,12 +322,15 @@ export default function OrdersPage() {
   const tabOrders = isQuotesTab
     ? allOrders
         .filter(o => (o.isQuote || o.status === "Quote") && !deletedQuoteIds.has(o.id))
-        .sort((a, b) => new Date(b.created).getTime() - new Date(a.created).getTime())
+        .sort((a, b) => dateSortDir
+          ? compareByDate(a.created, b.created, dateSortDir)
+          : new Date(b.created).getTime() - new Date(a.created).getTime())
     : tab === "Bids"
     ? []
     : allOrders
         .filter(o => !o.isQuote && o.status !== "Quote" && !hiddenOrderIds.has(o.id))
         .sort((a, b) => {
+          if (dateSortDir) return compareByDate(a.due, b.due, dateSortDir);
           const sd = (STATUS_SORT_ORDER[a.status] ?? 99) - (STATUS_SORT_ORDER[b.status] ?? 99);
           if (sd !== 0) return sd;
           return new Date(a.due).getTime() - new Date(b.due).getTime();
@@ -589,7 +613,16 @@ export default function OrdersPage() {
                 {!isQuotesTab && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">EMAIL</th>}
                 {!isQuotesTab && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">PHONE</th>}
                 <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">
-                  {isQuotesTab ? "DATE ADDED ↕" : "DUE DATE ↕"}
+                  <button
+                    onClick={toggleDateSort}
+                    className="flex items-center gap-1 hover:text-gray-700 transition-colors"
+                    title="Sort by this column"
+                  >
+                    {isQuotesTab ? "DATE ADDED" : "DUE DATE"}
+                    {dateSortDir === "asc" && <ArrowUp size={11} />}
+                    {dateSortDir === "desc" && <ArrowDown size={11} />}
+                    {dateSortDir === null && <ArrowUpDown size={11} className="opacity-40" />}
+                  </button>
                 </th>
                 {isQuotesTab && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">EMAIL</th>}
                 {isQuotesTab && <th className="px-4 py-2.5 text-left text-xs font-medium text-gray-500">PHONE</th>}
