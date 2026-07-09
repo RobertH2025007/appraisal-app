@@ -7,6 +7,7 @@ import { Suspense, useState, useRef } from "react";
 import { Sparkles, Upload, Check, ChevronRight, ArrowLeft, FileSpreadsheet, X } from "lucide-react";
 import { saveOrder, type StoredOrder } from "@/lib/orders-store";
 import { read as xlsxRead, utils as xlsxUtils } from "xlsx";
+import { format as formatDate } from "date-fns";
 
 
 const PROPERTY_TYPES = [
@@ -482,6 +483,24 @@ function parseCSV(text: string): Record<string, string>[] {
   });
 }
 
+// Excel/Sheets serial date epoch is Dec 30, 1899 (accounts for Excel's 1900 leap-year bug).
+function excelSerialToDate(serial: number): Date {
+  return new Date(Date.UTC(1899, 11, 30) + Math.round(serial * 86400000));
+}
+
+// Spreadsheets that store dates as unformatted numeric cells export that raw
+// serial number into the CSV/XLSX row instead of a readable date. Detect and
+// reformat it so "46188" becomes "Jun 15, 2026" instead of showing as-is.
+function normalizeDateField(value: string): string {
+  const trimmed = value.trim();
+  if (!/^\d+(\.\d+)?$/.test(trimmed)) return value;
+  const serial = parseFloat(trimmed);
+  if (serial <= 20000 || serial >= 80000) return value;
+  const hasTime = serial % 1 !== 0;
+  const date = excelSerialToDate(serial);
+  return formatDate(date, hasTime ? "MMM d, yyyy h:mm a" : "MMM d, yyyy");
+}
+
 function csvRowToOrder(row: Record<string, string>): Omit<StoredOrder, "id" | "created"> {
   const get = (...keys: string[]) =>
     keys.map(k => row[k] ?? row[k.replace(/_/g, " ")] ?? "").find(v => v) ?? "";
@@ -498,8 +517,8 @@ function csvRowToOrder(row: Record<string, string>): Omit<StoredOrder, "id" | "c
     orderType:     get("order_type", "order_source") || "Lender",
     reportType:    get("report_type", "type", "form"),
     fee:           get("fee", "amount", "appraisal_fee"),
-    dueDate:       get("due_date", "due", "deadline", "delivery_date"),
-    inspectionDate:get("inspection_date", "inspection", "inspection_datetime"),
+    dueDate:       normalizeDateField(get("due_date", "due", "deadline", "delivery_date")),
+    inspectionDate:normalizeDateField(get("inspection_date", "inspection", "inspection_datetime")),
     purpose:       get("purpose", "appraisal_purpose"),
     loanNumber:    get("loan_number", "loan_num", "loan_no", "loan"),
     notes:         get("notes", "comments", "instructions", "special_instructions"),
@@ -544,13 +563,15 @@ function QuickStart({ onSkip, onBulkImport }: { onSkip: () => void; onBulkImport
           rows = parseCSV(text);
         } else {
           const data = new Uint8Array(e.target?.result as ArrayBuffer);
-          const wb = xlsxRead(data, { type: "array" });
+          const wb = xlsxRead(data, { type: "array", cellDates: true });
           const ws = wb.Sheets[wb.SheetNames[0]];
           rows = (xlsxUtils.sheet_to_json(ws, { defval: "" }) as Record<string, unknown>[]).map(r =>
             Object.fromEntries(
               Object.entries(r).map(([k, v]) => [
                 k.toLowerCase().replace(/\s+/g, "_").replace(/[^a-z0-9_]/g, ""),
-                String(v ?? ""),
+                v instanceof Date
+                  ? formatDate(v, v.getHours() !== 0 || v.getMinutes() !== 0 ? "MMM d, yyyy h:mm a" : "MMM d, yyyy")
+                  : String(v ?? ""),
               ])
             )
           );
